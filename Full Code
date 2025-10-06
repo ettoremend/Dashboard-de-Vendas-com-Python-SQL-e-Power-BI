@@ -1,0 +1,77 @@
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import sqlite3
+
+# -----------------------------------------
+# 1️⃣ Criar pastas necessárias
+# -----------------------------------------
+os.makedirs('dados', exist_ok=True)
+os.makedirs('database', exist_ok=True)
+
+# -----------------------------------------
+# 2️⃣ Gerar dataset fictício de vendas
+# -----------------------------------------
+np.random.seed(42)
+
+produtos = ['Notebook', 'Mouse', 'Teclado', 'Monitor', 'Headset', 'Impressora']
+regioes = ['São Paulo', 'Rio de Janeiro', 'Minas Gerais', 'Bahia', 'Paraná']
+meses = pd.date_range(start='2023-01-01', periods=12, freq='MS')
+num_registros = 500
+
+dados = {
+    'Data_Venda': np.random.choice(meses, num_registros),
+    'Produto': np.random.choice(produtos, num_registros),
+    'Regiao': np.random.choice(regioes, num_registros),
+    'Quantidade': np.random.randint(1, 10, num_registros),
+    'Preco_Unitario': np.random.uniform(100, 5000, num_registros).round(2)
+}
+
+df_vendas = pd.DataFrame(dados)
+df_vendas['Total_Venda'] = (df_vendas['Quantidade'] * df_vendas['Preco_Unitario']).round(2)
+
+# Salvar CSV
+csv_path = 'dados/vendas.csv'
+df_vendas.to_csv(csv_path, index=False)
+print(f"✅ Dados gerados com sucesso em {csv_path}")
+
+# -----------------------------------------
+# 3️⃣ Salvar dados no banco SQLite
+# -----------------------------------------
+db_path = 'database/vendas.db'
+conn = sqlite3.connect(db_path)
+df_vendas.to_sql('vendas', conn, if_exists='replace', index=False)
+
+# Consulta de exemplo: total de vendas por região
+consulta = pd.read_sql("""
+    SELECT Regiao, SUM(Total_Venda) AS Total
+    FROM vendas
+    GROUP BY Regiao
+    ORDER BY Total DESC
+""", conn)
+print("\n📊 Total de vendas por região:")
+print(consulta)
+
+conn.close()
+
+# -----------------------------------------
+# 4️⃣ Criar gráficos
+# -----------------------------------------
+df_vendas['Data_Venda'] = pd.to_datetime(df_vendas['Data_Venda'])
+
+# Vendas por Produto
+df_vendas.groupby('Produto')['Total_Venda'].sum().sort_values().plot(
+    kind='barh', title='Vendas por Produto', figsize=(8,5))
+plt.xlabel('R$')
+plt.tight_layout()
+plt.show()
+
+# Faturamento Mensal
+df_vendas['Mes'] = df_vendas['Data_Venda'].dt.to_period('M')
+df_vendas.groupby('Mes')['Total_Venda'].sum().plot(
+    marker='o', title='Faturamento Mensal', figsize=(8,5))
+plt.ylabel('R$')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
